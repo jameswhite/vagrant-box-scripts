@@ -127,15 +127,6 @@ sudo pkicreate -pki_instance_root=/var/lib           \
 grep https /var/log/pki-tps-install.log
 # configure it manually and send a sternly written email to dogtag-pki team that it's not 1997.
 
-libapache2-mod-rev
-    pki-tps pki-ra
+dpkg -i dogtag-pki*deb
 
-################################################################################
-Please start the configuration by accessing:
-
-https://boron.jameswhite.org:9445/ca/admin/console/config/login?pin=d2dH9rRxhfEsNb1Sc9bA
-
-After configuration, the server can be operated by the command:
-
-    /usr/sbin/service pki-cad restart pki-ca
-
+# ipa-pki-*.deb are not installed
