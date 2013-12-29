@@ -1,0 +1,246 @@
+#!/bin/bash
+################################################################################
+# host prep
+################################################################################
+# eff you fedora...
+yum update -y 
+yum install -y net-tools
+
+# oh god eff you fedora...
+################################################################################
+# 389-ds requires the forward lookup to match the reverse lookup or it will complain and/or not start
+HOSTNAME=beryllium
+DOMAINNAME=jameswhite.org
+IP_ETH0=$(ifconfig eth0|grep inet|sed -e 's/.*inet //g' -e 's/ .*//g')
+grep "${IP_ETH0} *${HOSTNAME}" /etc/hosts||echo "$IP_ETH0 ${HOSTNAME}.${DOMAINNAME} ${HOSTNAME}" >> /etc/hosts
+################################################################################
+
+if [ -z $(hostname -d) ] ;then echo "domain not set"; exit 1; fi
+if [ -z $(hostname -f) ] ;then echo "fqdn not set";   exit 1; fi
+
+
+cp /etc/security/limits.conf /etc/security/limits.conf.dist
+cat<<EOF | while read line; do grep "$line" /etc/security/limits.conf || echo "$line" >> /etc/security/limits.conf ; done
+root          soft    nofile           4096
+root          hard    nofile           40960
+nobody        soft    nofile           4096
+nobody        hard    nofile           40960
+EOF
+
+cp /etc/sysctl.conf /etc/sysctl.conf.dist
+grep "fs.file-max = 100000" /etc/sysctl.conf || echo "fs.file-max = 100000" >> /etc/sysctl.conf && sysctl -p
+grep "net.ipv4.tcp_keepalive_time = 60" /etc/sysctl.conf || echo "net.ipv4.tcp_keepalive_time = 60" >> /etc/sysctl.conf && sysctl -p
+
+
+# a bug with dogtag won't let us configure the RA service if it's enforcing
+sed -ie 's/SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
+
+# Reboot, add ram, disk (if necessary)
+
+################################################################################
+# 389-ds prep
+################################################################################
+yum --enablerepo=updates-testing install -y 389-ds 389-admin-console 389-console
+
+cat<<EOF > /root/setup-ds.inf
+[General]
+FullMachineName= $(hostname -f)
+SuiteSpotUserID= nobody
+SuiteSpotGroup= nobody
+ConfigDirectoryLdapURL= ldap://$(hostname -f):389/o=NetscapeRoot
+ConfigDirectoryAdminID= admin
+ConfigDirectoryAdminPwd= bobloblaw
+AdminDomain= $(hostname -d)
+
+[slapd]
+ServerIdentifier= $(hostname -s)
+ServerPort= 389
+Suffix= dc=$(echo $(hostname -d)|sed -e 's/\./,dc=/g')
+RootDN= cn=Directory Manager
+RootDNPwd= bobloblaw
+
+[admin]
+ServerAdminID= admin
+ServerAdminPwd= bobloblaw
+SysUser= nobody
+EOF
+
+/usr/sbin/setup-ds-admin.pl -s -f /root/setup-ds.inf
+
+ldapsearch -xLLLHldap://$(hostname -f):389 -b"dc=$(hostname -d|sed -e's/\./,dc=/g')" -D "cn=Directory Manager" -w "bobloblaw"
+EXIT=$?;
+if [ $EXIT -eq 0 ];then 
+    /bin/rm /root/setup-ds.inf 
+else
+    echo "389-ds didn't install properly... Aborting."
+    exit 1
+fi 
+
+systemctl enable dirsrv-admin
+systemctl enable dirsrv.target
+
+# /bin/rm /etc/systemd/system/dirsrv.target.wants/dirsrv@$(hostname -s).service
+# /bin/cp /lib/systemd/system/dirsrv@.service /etc/systemd/system/dirsrv.target.wants/dirsrv@$(hostname -s).service
+
+# cat<<EOF>> /etc/systemd/system/dirsrv.target.wants/dirsrv@$(hostname -s).service
+# [Install]
+# WantedBy=multi-user.target
+# EOF
+
+systemctl daemon-reload
+
+################################################################################
+# dogtag prep
+################################################################################
+
+yum --enablerepo=updates-testing install -y dogtag-pki
+
+cat<<EOF > /etc/pki/local.cfg
+###############################################################################
+##  Local Configuration:                                                     ##
+##                                                                           ##
+##  Applied aftrer default.cfg, so only overrides need be within.            ##
+##                                                                           ##
+###############################################################################
+[DEFAULT]
+pki_admin_password=administrator
+pki_backup_password=backup
+pki_client_database_password=database
+pki_client_pkcs12_password=pkcs#12
+pki_ds_password=bobloblaw
+
+# This seems to be used to authenticate against pki_admin, so the password appears to need to be the same
+pki_security_domain_password=administrator
+pki_token_password=token
+pki_clone_pkcs12_password=clone
+EOF
+
+pkispawn -s CA   -f /etc/pki/local.cfg
+pkispawn -s KRA  -f /etc/pki/local.cfg
+pkispawn -s TKS  -f /etc/pki/local.cfg
+pkispawn -s OCSP -f /etc/pki/local.cfg
+
+systemctl enable pki-tomcatd\@pki-tomcat.service
+
+pkicreate -pki_instance_root=/var/lib        \
+          -pki_instance_name=pki-ra          \
+          -subsystem_type=ra                 \
+          -secure_port=12889                 \
+          -non_clientauth_secure_port=12890  \
+          -unsecure_port=12888               \
+          -user=pkiuser                      \
+          -group=pkiuser                     \
+          -redirect conf=/etc/pki-ra         \
+          -redirect logs=/var/log/pki-ra     \
+          -verbose
+
+pkicreate -pki_instance_root=/var/lib       \
+          -pki_instance_name=pki-tps        \
+          -subsystem_type=tps               \
+          -secure_port=7889                 \
+          -non_clientauth_secure_port=7890  \
+          -unsecure_port=7888               \
+          -user=pkiuser                     \
+          -group=pkiuser                    \
+          -redirect conf=/etc/pki-tps       \
+          -redirect logs=/var/log/pki-tps   \
+          -verbose
+
+exit 0;
+################################################################################
+# 
+################################################################################
+# /usr/sbin/remove-ds-admin.pl -y
+# /usr/sbin/setup-ds-admin.pl -s -f /etc/dirsrv/config/setup-ds-admin.inf
+/usr/sbin/setup-ds-admin
+
+# admin                J4stg,l14lw.
+# cn=Directory Manager J4cb,b4r1sD.
+# register with ldap://faraday.eftdomain.net:389/o=NetscapeRoot
+
+exit $EXIT;
+################################################################################
+# add certs
+################################################################################
+# scp faraday:{maxwell-backup.p12,midca.pem,rootca.pem} .
+# scp faraday.eftdomain.net:{midca.pem,rootca.pem} .
+certutil -d /etc/dirsrv/slapd-$(hostname -s) -L
+
+certutil -A -d /etc/dirsrv/slapd-$(hostname -s) -n "eftdomain.net intermediate ca" -t "CT,," -a -i midca.pem
+certutil -A -d /etc/dirsrv/slapd-$(hostname -s) -n "eftdomain.net root ca" -t "CT,," -a -i rootca.pem
+pk12util -i $(hostname -s)-backup.p12 -d /etc/dirsrv/slapd-$(hostname -s) # J4stg,l14lw.  (import)
+# pk12util -d . -o $(hostname -s)-backup.p12 -n "$(hostname -s).eftdomain.net-cert" # (export)
+
+certutil -d /etc/dirsrv/admin-serv -L
+certutil -A -d /etc/dirsrv/admin-serv -n "eftdomain.net intermediate ca" -t "CT,," -a -i midca.pem
+certutil -A -d /etc/dirsrv/admin-serv -n "eftdomain.net root ca" -t "CT,," -a -i rootca.pem
+pk12util -i $(hostname -s)-backup.p12 -h "$(hostname -f)-cert" -d /etc/dirsrv/admin-serv -W "$(secret)" # J4stg,l14lw. (import)
+
+echo "Internal (Software) Token:J4stg,l14lw." > /etc/dirsrv/slapd-$(hostname -s)/pin.txt
+echo "internal:J4stg,l14lw." > /etc/dirsrv/admin-serv/password.conf
+
+################################################################################
+# Enable SSL
+################################################################################
+cat<<EOF > /tmp/ssl_enable.ldif
+dn: cn=encryption,cn=config
+changetype: modify
+replace: nsSSL3
+nsSSL3: on
+-
+replace: nsSSLClientAuth
+nsSSLClientAuth: allowed
+-
+add: nsSSL3Ciphers
+nsSSL3Ciphers: -rsa_null_md5,+rsa_rc4_128_md5,+rsa_rc4_40_md5,+rsa_rc2_40_md5,+rsa_des_sha,+rsa_fips_des_sha,+rsa_3des_sha,+rsa_fips_3des_sha,+fortezza,+fortezza_rc4_128_sha,+fortezza_null,+tls_rsa_export1024_with_rc4_56_sha,+tls_rsa_export1024_with_des_cbc_sha,-rc4,-rc4export,-rc2,-rc2export,-des,-desede3
+
+dn: cn=config
+changetype: modify
+add: nsslapd-security
+nsslapd-security: on
+-
+replace: nsslapd-ssl-check-hostname
+nsslapd-ssl-check-hostname: off
+EOF
+
+ldapmodify -xH ldap://127.0.0.1:389 -D "cn=Directory manager" -w J4cb,b4r1sD. -f /tmp/ssl_enable.ldif
+
+cat<<EOF > /tmp/addRSA.ldif
+dn: cn=RSA,cn=encryption,cn=config
+changetype: add
+objectclass: top
+objectclass: nsEncryptionModule
+cn: RSA
+nsSSLPersonalitySSL: $(hostname -f)-cert
+nsSSLToken: internal (software)
+nsSSLActivation: on
+EOF
+ldapmodify -xH ldap://127.0.0.1:389 -D "cn=Directory manager" -w J4cb,b4r1sD. -f /tmp/addRSA.ldif
+
+################################################################################
+#!!! copy any extra schema files to /etc/dirsrv/slapd-$(hostname -s)/schema !!!
+################################################################################
+(cd /etc/dirsrv/slapd-$(hostname -s)/schema/; cp 99user.ldif 99user.ldif.dist)
+(cd /etc/dirsrv/slapd-$(hostname -s)/schema/; scp root@faraday.eftdomain.net:/etc/dirsrv/slapd-faraday/schema/{70samba.ldif,75dhcp.ldif,99user.ldif} .)
+/etc/init.d/dirsrv restart
+
+################################################################################
+# Enable replication
+################################################################################
+
+cat<<EOF > /tmp/repl.ldif
+# replication manager, config
+dn: cn=replication manager,cn=config
+objectClass: top
+objectClass: person
+cn: Replication Manager
+sn: Manager
+userPassword:: e1NTSEF9QzR0SDl0cGdkSm5VY3lJQXMrS3VYY0lEVWlOVVpHdHM=
+EOF
+ldapadd -xH ldap://127.0.0.1:389 -D "cn=Directory manager" -w J4cb,b4r1sD. -f /tmp/repl.ldif
+
+################################################################################
+# Enable SSL on the admin-serv
+################################################################################
+http://directory.fedoraproject.org/wiki/Howto:SSL#Admin_Server_SSL_Information
+

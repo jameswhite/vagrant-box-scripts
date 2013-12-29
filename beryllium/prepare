@@ -1,0 +1,31 @@
+#!/bin/bash
+(cd ~/boxes/beryllium ; vagrant status | grep "running (virtualbox)" || vagrant up)
+(cd ~/boxes/beryllium ; cat ~/.ssh/id_rsa.pub | vagrant ssh -- "cat - >> ~/.ssh/authorized_keys" )
+(cd ~/boxes/beryllium ; cat ~/.ssh/id_rsa.pub | vagrant ssh -- "cat - | sudo tee /root/.ssh/authorized_keys" )
+cat ~/Documents/beryllium/dogtag-fedora | ( cd ~/boxes/beryllium ; vagrant ssh -- "sudo tee dogtag-fedora" )
+
+cat<<EOF |( cd ~/boxes/beryllium ; vagrant ssh )
+echo "beryllium.jameswhite.org" | sudo tee /etc/hostname
+sudo hostname beryllium.jameswhite.org
+sudo domainname jameswhite.org
+echo
+echo "################################################################################"
+echo "#                          running dogtag-fedora                               #"
+echo "################################################################################"
+echo
+sudo bash dogtag-fedora
+EOF
+
+exit 0; 
+
+# retrieve the pkcs#12 cert/key for administration
+( 
+  cd ~/boxes/beryllium ;
+  scp -P $(vagrant ssh-config | grep Port | awk '{print $2}')  -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@127.0.0.1:.dogtag/pki-tomcat/ca_admin_cert.p12 .
+)
+vagrant ssh -- -gL8005:127.0.0.1:8005 -gL8443:127.0.0.1:8443 -gL12890:127.0.0.1:12890 -gL7890:127.0.0.1:7890 
+
+# There should be some links not unlike in $(grep https /var/log/pki-*-install.log)
+#
+# https://beryllium.jameswhite.org:12890/ra/admin/console/config/login?pin=40wuKmelLYmsuvif2PNU
+# https://beryllium.jameswhite.org:7890/tps/admin/console/config/login?pin=5XOZ7QWl8K0XILgrnCmq

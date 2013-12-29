@@ -1,0 +1,141 @@
+#!/bin/bash
+sudo apt-get install -y git
+(cd; mkdir -p dev/git)
+(cd ~/dev/git;     git clone https://alioth.debian.org/anonscm/git/pkg-freeipa/pki.git)
+(cd ~/dev/git/pki; git checkout ubuntu) 
+
+# build deps from debian/control
+sudo apt-get install -y build-essential debhelper pkg-config quilt cmake javahelper default-jdk libapr1-dev libcommons-codec-java libidm-console-framework-java libjss-java libldap2-dev libldap-java libnspr4-dev libnss3-dev libservlet2.4-java libsvrcore-dev libtomcatjss-java libxalan2-java libxerces2-java policycoreutils selinux-policy-dev velocity apache2-threaded-dev
+
+# cmake ignores the CFLAGS and CPPFLAGS and instead detects where the nss libs are based on the existance of nss.h, which libc6 also provides
+moved=0
+if [ -f "/usr/include/nss.h" ]; then 
+    sudo mv /usr/include/nss.h /usr/include/NO_nss.h
+    moved=1
+fi
+
+fakeroot ./debian/rules binary
+
+# move it back if we moved it out of the way
+if [ $moved -eq 1 ];then
+    sudo mv /usr/include/NO_nss.h /usr/include/nss.h
+fi
+
+cd ~/dev/git; sudo dpkg -i libpki-*.deb
+
+sudo apt-get install -y libdevel-symdump-perl libbsd-resource-perl libapache2-reload-perl perl-dbdabi-94 libxml-namespacesupport-perl libxml-sax-perl tomcat6-common
+sudo apt-get install -y tomcat6 libapache2-mod-perl2 libdbd-sqlite3-perl libparse-recdescent-perl libxml-simple-perl libfile-slurp-perl libcrypt-ssleay-perl libxml-libxml-perl
+sudo dpkg -i pki-native-tools_*.deb pki-java-tools_*.deb pki-common_*.deb pki-setup_*.deb pki-silent_*.deb pki-console_*.deb
+sudo apt-get install libconfig-file-perl liblist-moreutils-perl libregexp-assemble-perl apt-file
+
+sudo dpkg -i pki-ca_*.deb
+pkicreate -pki_instance_root=/var/lib       \
+          -pki_instance_name=pki-ca         \
+          -subsystem_type=ca                \
+          -agent_secure_port=9443           \
+          -ee_secure_port=9444              \
+          -ee_secure_client_auth_port=9446  \
+          -admin_secure_port=9445           \
+          -unsecure_port=9180               \
+          -tomcat_server_port=9701          \
+          -user=pkiuser                     \
+          -group=pkiuser                    \
+          -redirect conf=/etc/pki-ca        \
+          -redirect logs=/var/log/pki-ca    \
+          -verbose
+grep https /var/log/pki-ca-install.log
+# configure it manually and send a sternly written email to dogtag-pki team that it's not 1997.
+
+sudo dpkg -i pki-kra_*.deb
+pkicreate -pki_instance_root=/var/lib      \
+          -pki_instance_name=pki-kra       \
+          -subsystem_type=kra              \
+          -agent_secure_port=10443         \
+          -ee_secure_port=10444            \
+          -admin_secure_port=10445         \
+          -unsecure_port=10180             \
+          -tomcat_server_port=10701        \
+          -user=pkiuser                    \
+          -group=pkiuser                   \
+          -audit_group=pkiaudit            \
+          -redirect conf=/etc/pki-kra      \
+          -redirect logs=/var/log/pki-kra  \
+          -verbose
+grep https /var/log/pki-kra-install.log
+# configure it manually and send a sternly written email to dogtag-pki team that it's not 1997.
+
+sudo dpkg -i pki-ocsp_*.deb
+pkicreate -pki_instance_root=/var/lib       \
+          -pki_instance_name=pki-ocsp       \
+          -subsystem_type=ocsp              \
+          -agent_secure_port=11443          \
+          -ee_secure_port=11444             \
+          -admin_secure_port=11445          \
+          -unsecure_port=11180              \
+          -tomcat_server_port=11701         \
+          -user=pkiuser                     \
+          -group=pkiuser                    \
+          -redirect conf=/etc/pki-ocsp      \
+          -redirect logs=/var/log/pki-ocsp  \
+          -verbose
+grep https /var/log/pki-ocsp-install.log
+# configure it manually and send a sternly written email to dogtag-pki team that it's not 1997.
+
+sudo dpkg -i pki-tks_*.deb
+pkicreate -pki_instance_root=/var/lib      \
+          -pki_instance_name=pki-tks       \
+          -subsystem_type=tks              \
+          -agent_secure_port=13443         \
+          -ee_secure_port=13444            \
+          -admin_secure_port=13445         \
+          -unsecure_port=13180             \
+          -tomcat_server_port=13701        \
+          -user=pkiuser                    \
+          -group=pkiuser                   \
+          -redirect conf=/etc/pki-tks      \
+          -redirect logs=/var/log/pki-tks  \
+          -verbose
+grep https /var/log/pki-tks-install.log
+# configure it manually and send a sternly written email to dogtag-pki team that it's not 1997.
+
+sudo dpkg -i pki-ra_*.deb
+pkicreate -pki_instance_root=/var/lib        \
+          -pki_instance_name=pki-ra          \
+          -subsystem_type=ra                 \
+          -secure_port=12889                 \
+          -non_clientauth_secure_port=12890  \
+          -unsecure_port=12888               \
+          -user=pkiuser                      \
+          -group=pkiuser                     \
+          -redirect conf=/etc/pki-ra         \
+          -redirect logs=/var/log/pki-ra     \
+          -verbose
+grep https /var/log/pki-ra-install.log
+# configure it manually and send a sternly written email to dogtag-pki team that it's not 1997.
+
+sudo dpkg -i pki-tps_*.deb
+sudo pkicreate -pki_instance_root=/var/lib           \
+               -pki_instance_name=pki-tps            \
+               -subsystem_type=tps -secure_port=7889 \
+               -non_clientauth_secure_port=7890      \
+               -unsecure_port=7888                   \
+               -user=pkiuser                         \
+               -group=pkiuser                        \
+               -redirect conf=/etc/pki-tps           \
+               -redirect logs=/var/log/pki-tps       \
+               -verbose
+grep https /var/log/pki-tps-install.log
+# configure it manually and send a sternly written email to dogtag-pki team that it's not 1997.
+
+libapache2-mod-rev
+    pki-tps pki-ra
+
+################################################################################
+Please start the configuration by accessing:
+
+https://boron.jameswhite.org:9445/ca/admin/console/config/login?pin=d2dH9rRxhfEsNb1Sc9bA
+
+After configuration, the server can be operated by the command:
+
+    /usr/sbin/service pki-cad restart pki-ca
+

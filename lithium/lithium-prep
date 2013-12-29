@@ -1,0 +1,11 @@
+#!/bin/bash
+(cd ~/boxes/lithium ; cat ~/.ssh/id_rsa.pub | vagrant ssh -- "cat - >> ~/.ssh/authorized_keys" )
+cat ~/Documents/389-ds-ubuntu | ( cd ~/boxes/lithium ; vagrant ssh -- "sudo tee 389-ds-ubuntu" )
+
+cat<<EOF |( cd ~/boxes/lithium ; vagrant ssh )
+echo "lithium.jameswhite.org" | sudo tee /etc/hostname
+sudo hostname lithium.jameswhite.org
+sudo bash 389-ds-ubuntu
+EOF
+
+# for pkg in $(dpkg -l | grep 389 | awk '{print $2}' | grep "^389"); do dpkg -L $pkg | sed -e "s/^/$pkg: /"; done | grep admin.inf

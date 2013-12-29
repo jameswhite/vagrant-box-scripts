@@ -1,0 +1,40 @@
+cat<<EOF | apt-key add -
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Version: SKS 1.1.4
+Comment: Hostname: keyserver.ubuntu.com
+
+mI0ESXYlrwEEAKc/w+eNnj3/jbDeeH6APs4PUHVxvFrjykmuM/eq/hiAgkWQVKdYp26TzUN2
+MEhlaw2XRK/1otU662sCbhf0kCCGuFoketRs7D+DPw8PrLs50IQckd85Ck9+WbfbjksyA+9K
+SRG8jwteQf7jrLjdgFBiLEOQkfVQDIopRFX5EFitABEBAAG0JExhdW5jaHBhZCBQUEEgZm9y
+IEtyenlzenRvZiBLbGltb25kYYi2BBMBAgAgBQJJdiWvAhsDBgsJCAcDAgQVAggDBBYCAwEC
+HgECF4AACgkQXpg54BqtLE3pfwP8CyS5guqW3aObP5o+GXf7bP66D7NYcTWtcA8J7fh3Wmob
+mTp9/mbw040XEo7obz37iP6EGe/oQUQLy0BqNBRgr3IuY46TLtpvFf0dXfV8JNYZuDmehfdJ
+QUzkK2qosBzBGmpQZwtm+foGwemNDolTP3pf3BAGpcaVrDAtGld1FII=
+=S5HI
+-----END PGP PUBLIC KEY BLOCK-----
+EOF
+
+cat<<EOF >> /etc/apt/sources.list
+deb http://ppa.launchpad.net/kklimonda/freeipa/ubuntu precise main 
+deb-src http://ppa.launchpad.net/kklimonda/freeipa/ubuntu precise main 
+EOF
+
+apt-get update
+apt-get install $(apt-cache search dogtag | awk '{print $1}' | tr '\n' ' ')
+
+################################################################################
+wget http://kojipkgs.fedoraproject.org//packages/dogtag-pki/9.0.0/13.fc17/src/dogtag-pki-9.0.0-13.fc17.src.rpm
+apt-get install rpm2cpio
+################################################################################
+
+mkdir -p /opt/local/src
+cd /opt/local/src
+git clone https://git.fedorahosted.org/git/pki.git
+cd pki
+git checkout DOGTAG_9_BRANCH
+
+# http://pki.fedoraproject.org/wiki/PKI_Prerequisites
+# yum install db4-devel gzip rpm rpm-build subversion tar wget zip
+
+apt-get install -y libdb4.8-dev gzip rpm subversion tar wget zip 
+
