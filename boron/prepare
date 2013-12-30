@@ -1,11 +1,21 @@
 #!/bin/bash
+WORKDIR=$(cd $(dirname $0); pwd)
+(cd ~/boxes/boron ; vagrant status | grep "running (virtualbox)" || vagrant up)
 (cd ~/boxes/boron ; cat ~/.ssh/id_rsa.pub | vagrant ssh -- "cat - >> ~/.ssh/authorized_keys" )
-cat ~/Documents/boron/389-ds-ubuntu | ( cd ~/boxes/boron ; vagrant ssh -- "sudo tee 389-ds-ubuntu" )
+cat $WORKDIR/389-ds-ubuntu | ( cd ~/boxes/boron ; vagrant ssh -- "sudo tee 389-ds-ubuntu" )
+cat $WORKDIR/build-dogtag-pki | ( cd ~/boxes/boron ; vagrant ssh -- "cat - > build-dogtag-pki" )
+cat $WORKDIR/other-components | ( cd ~/boxes/boron ; vagrant ssh -- "cat - > other-components" )
 
 cat<<EOF |( cd ~/boxes/boron ; vagrant ssh )
 echo "boron.jameswhite.org" | sudo tee /etc/hostname
 sudo hostname boron.jameswhite.org
 sudo bash 389-ds-ubuntu
+bash build-dogtag-pki
 EOF
+$WORKDIR/ssh_w_redirects
+cat<<EOF |( cd ~/boxes/boron ; vagrant ssh )
+bash other-components
+EOF
+$WORKDIR/ssh_w_redirects
 
 # for pkg in $(dpkg -l | grep 389 | awk '{print $2}' | grep "^389"); do dpkg -L $pkg | sed -e "s/^/$pkg: /"; done | grep admin.inf
