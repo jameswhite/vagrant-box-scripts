@@ -2,6 +2,11 @@
 ################################################################################
 # host prep
 ################################################################################
+
+# 389-ds, sudo require the forward lookup to match the reverse lookup or it will complain and/or not start
+IP_ETH0=$(ifconfig eth0 | grep 'inet addr:' | sed -e 's/.*inet addr://g' -e 's/ .*//')
+grep "$IP_ETH0 *$(hostname).jameswhite.org" /etc/hosts||echo "$IP_ETH0 $(hostname -s).jameswhite.org $(hostname -s)" >> /etc/hosts
+
 sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 07B8937284F281ED
 sudo add-apt-repository ppa:ubuntu-389-directory-server/ppa
 apt-get update
@@ -24,10 +29,6 @@ EOF
 
 cp /etc/sysctl.conf /etc/sysctl.conf.dist
 grep "fs.file-max = 100000" /etc/sysctl.conf || echo "fs.file-max = 100000" >> /etc/sysctl.conf && sysctl -p
-
-# 389-ds requires the forward lookup to match the reverse lookup or it will complain and/or not start
-IP_ETH0=$(ifconfig eth0 | grep 'inet addr:' | sed -e 's/.*inet addr://g' -e 's/ .*//')
-grep "$IP_ETH0 *$(hostname)" /etc/hosts||echo "$IP_ETH0 $(hostname -f) $(hostname -s)" >> /etc/hosts
 
 ################################################################################
 # Reboot, add ram, disk (if necessary)

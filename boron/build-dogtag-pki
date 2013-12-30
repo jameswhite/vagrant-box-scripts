@@ -1,7 +1,7 @@
 #!/bin/bash
 sudo apt-get install -y git
 (cd; mkdir -p dev/git)
-(cd ~/dev/git;     git clone https://alioth.debian.org/anonscm/git/pkg-freeipa/pki.git)
+(cd ~/dev/git;     git clone https://github.com/jameswhite/dogtag-pki pki)
 [ ! -d ~/dev/git/pki ] && exit 1
 (cd ~/dev/git/pki; git checkout ubuntu) 
 
