@@ -1,0 +1,33 @@
+#!/bin/bash
+clear
+if [ ! -d dogtag-pki ] ; then
+    git clone https://github.com/jameswhite/dogtag-pki -b ubuntu
+    (cd dogtag-pki; git branch | grep "* ubuntu" || git checkout ubuntu)
+fi
+if [ $(ls -1 *.deb 2>/dev/null|wc -l) -ne 0 ] ;then rm *.deb ;fi  
+[ -d "pki" ] && rm -fr pki
+git clone ./dogtag-pki pki -b ubuntu
+# for FILE in nss.h pk11func.h seccomon.h secerr.h secasn1.h cert.h cryptohi.h secoid.h certdb.h sslerr.h seccomon.h secitem.h base64.h key.h secpkcs7.h secder.h certt.h secport.h ssl.h sechash.h secoidt.h keyhi.h nssb64.h hasht.h; do
+for FILE in $(ls -1 /usr/include/nss); do
+    find pki -type f -name "*.cpp" -exec grep "#include *\"${FILE}\"" {} /dev/null \; |grep -v "Binary file"|awk -F: '{print $1}'|while read line; do
+        sed -ie "s/\"${FILE}\"/\"nss\/${FILE}\"/g" $line;
+    done
+    find pki -type f -name "*.cpp" -exec grep "#include *<${FILE}>" {} /dev/null \; |grep -v "Binary file"|awk -F: '{print $1}'|while read line; do
+        sed -ie "s/<${FILE}>/<nss\/${FILE}>/g" $line;
+    done
+    find pki -type f -name "*.c" -exec grep "#include *\"${FILE}\"" {} /dev/null \; |grep -v "Binary file"|awk -F: '{print $1}'|while read line; do
+        sed -ie "s/\"${FILE}\"/\"nss\/${FILE}\"/g" $line;
+    done
+    find pki -type f -name "*.c" -exec grep "#include *<${FILE}>" {} /dev/null \; |grep -v "Binary file"|awk -F: '{print $1}'|while read line; do
+        sed -ie "s/<${FILE}>/<nss\/${FILE}>/g" $line;
+    done
+    find pki -type f -name "*.h" -exec grep "#include *\"${FILE}\"" {} /dev/null \; |grep -v "Binary file"|awk -F: '{print $1}'|while read line; do
+        sed -ie "s/\"${FILE}\"/\"nss\/${FILE}\"/g" $line;
+    done
+    find pki -type f -name "*.h" -exec grep "#include *<${FILE}>" {} /dev/null \; |grep -v "Binary file"|awk -F: '{print $1}'|while read line; do
+        sed -ie "s/<${FILE}>/<nss\/${FILE}>/g" $line;
+    done
+done
+diff -ruN dogtag-pki pki > dogtag.patch
+(cd pki; fakeroot debian/rules binary) > build.out 2>&1
+

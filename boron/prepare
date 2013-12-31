@@ -12,6 +12,9 @@ sudo hostname boron.jameswhite.org
 sudo bash 389-ds-ubuntu
 bash build-dogtag-pki
 EOF
+
+exit 1; 
+
 $WORKDIR/ssh_w_redirects
 cat<<EOF |( cd ~/boxes/boron ; vagrant ssh )
 bash other-components

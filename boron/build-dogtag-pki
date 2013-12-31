@@ -8,20 +8,22 @@ sudo apt-get install -y git
 # build deps from debian/control
 sudo apt-get install -y build-essential debhelper pkg-config quilt cmake javahelper default-jdk libapr1-dev libcommons-codec-java libidm-console-framework-java libjss-java libldap2-dev libldap-java libnspr4-dev libnss3-dev libservlet2.4-java libsvrcore-dev libtomcatjss-java libxalan2-java libxerces2-java policycoreutils selinux-policy-dev velocity apache2-threaded-dev
 
-# # cmake ignores the CFLAGS and CPPFLAGS and instead detects where the nss libs are based on the existance of nss.h, which libc6 also provides
-# moved=0
-# if [ -f "/usr/include/nss.h" ]; then 
-#     sudo mv /usr/include/nss.h /usr/include/NO_nss.h
-#     moved=1
-# fi
+# cmake ignores the CFLAGS and CPPFLAGS and instead detects where the nss libs are based on the existance of nss.h, which libc6 also provides
+moved=0
+if [ -f "/usr/include/nss.h" ]; then 
+    sudo mv /usr/include/nss.h /usr/include/NO_nss.h
+    moved=1
+fi
 
 # build it.
 ( cd ~/dev/git/pki ; fakeroot ./debian/rules binary )
 
-# # move it back if we moved it out of the way
-# if [ $moved -eq 1 ];then
-#     sudo mv /usr/include/NO_nss.h /usr/include/nss.h
-# fi
+# move it back if we moved it out of the way
+if [ $moved -eq 1 ];then
+    sudo mv /usr/include/NO_nss.h /usr/include/nss.h
+fi
+
+exit 1; 
 
 # get install dependiencies
 sudo apt-get install -y libdevel-symdump-perl libbsd-resource-perl libapache2-reload-perl perl-dbdabi-94 libxml-namespacesupport-perl libxml-sax-perl tomcat6-common
