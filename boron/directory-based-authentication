@@ -4,9 +4,9 @@ auths.instance.UserDirEnrollment.dnpattern=uid=$attr.uid,ou=people,dc=github,dc=
 auths.instance.UserDirEnrollment.ldapByteAttribute=
 auths.instance.UserDirEnrollment.ldapStringAttribute=
 auths.instance.UserDirEnrollment.pluginName=UidPwdDirAuth
-auths.instance.UserDirEnrollment.basedn=ou=people,dc=github,dc=com
-auths.instance.UserDirEnrollment.maxConns=
-auths.instance.UserDirEnrollment.minConns=
+auths.instance.UserDirEnrollment.ldap.basedn=ou=people,dc=github,dc=com
+auths.instance.UserDirEnrollment.ldap.maxConns=
+auths.instance.UserDirEnrollment.ldap.minConns=
 auths.instance.UserDirEnrollment.ldap.ldapconn.host=127.0.0.1
 auths.instance.UserDirEnrollment.ldap.ldapconn.port=389
 auths.instance.UserDirEnrollment.ldap.ldapconn.secureConn=false
